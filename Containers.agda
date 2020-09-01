@@ -1,16 +1,13 @@
 {-# OPTIONS --type-in-type #-}
 
 open import Relation.Binary.PropositionalEquality
---   renaming (trans to infixr 4 _◾_; subst to tr; cong to ap; sym to infix 6 _⁻¹)
+  renaming (trans to infixr 4 _◾_)
 open import Data.Unit
 open import Data.Empty
 open import Data.Bool
 open import Relation.Nullary
 open import Data.Product
--- open import Data.Sum
 open import Function using (_∘_)
--- open import Function using (_∋_)
--- open import Level
 import Axiom.Extensionality.Propositional as Axiom
 
 module _ where
@@ -18,6 +15,9 @@ module _ where
 postulate
   funExt  : ∀ {i j} → Axiom.Extensionality i j
   funExti : ∀ {i j} → Axiom.ExtensionalityImplicit i j
+
+uip : ∀ {A : Set}{x y : A}(p q : x ≡ y) → p ≡ q
+uip refl refl = refl
 
 module CT where
 
@@ -65,53 +65,51 @@ module CwF (C : Category) where
     field
       fun : ∀ {A} → pt Γ A → pt Δ A
       nat : ∀ {A B} {f : Mor A B} → ∀ (γ : pt Γ B) → mor Δ f (fun γ) ≡ fun (mor Γ f γ)
+  open Sub public
 
   record Ty (Γ : Con) : Set where
     field
-      pt : ∀ {A} (γ : pt Γ A) → Set
-      mor : ∀ {A B} (f : Mor A B) {γA : Con.pt Γ A} {γB : Con.pt Γ B} → Con.mor Γ f γB ≡ γA  → pt γB → pt γA
-      id : ∀ {A} {γ : Con.pt Γ A} (t : pt γ) → mor C.id (id Γ) t ≡ t
+      ty : ∀ {A} (γ : pt Γ A) → Set
+      mor : ∀ {A B} (f : Mor A B) {γA : pt Γ A} {γB : pt Γ B} → mor Γ f γB ≡ γA  → ty γB → ty γA
+      id : ∀ {A} {γ : pt Γ A} (t : ty γ) → mor C.id (id Γ) t ≡ t
 
-      comp : ∀ {A B C} (f : Mor B C) (g : Mor A B) {γA : Con.pt Γ A} {γB : Con.pt Γ B} {γC : Con.pt Γ C} →
+      comp : ∀ {A B C} (f : Mor B C) (g : Mor A B) {γA : pt Γ A} {γB : pt Γ B} {γC : pt Γ C} →
         (eq-f : Con.mor Γ f γC ≡ γB) →
         (eq-g : Con.mor Γ g γB ≡ γA) →
-        (t : pt γC) →
-        mor (f ∙ g) {!!} t ≡ mor g eq-g (mor f eq-f t)
-      --     -- morph-comp : ∀ {x y z} (f : Hom x y) (g : Hom y z) {γz : Γ ⟨ z ⟩} {γy : Γ ⟨ y ⟩} {γx : Γ ⟨ x ⟩} →
-      --     --        (eq-zy : Γ ⟪ g ⟫ γz ≡ γy) (eq-yx : Γ ⟪ f ⟫ γy ≡ γx) (t : type z γz) →
-      --     --        morph (g ∙ f) (strong-rel-comp Γ eq-zy eq-yx) t ≡ morph f eq-yx (morph g eq-zy t)
+        (t : ty γC) →
+        mor (f ∙ g) (Con.comp Γ f g γC ◾ cong _ eq-f ◾ eq-g) t ≡ mor g eq-g (mor f eq-f t)
   open Ty public
+
+  infix 6 _[_]T
+  _[_]T : ∀ {Γ Δ} → Ty Δ → Sub Γ Δ → Ty Γ
+  _[_]T {Γ} {Δ} A σ = record
+    { ty = λ γ → ty A (fun σ γ)
+    ; mor = λ f {γA} {γB} eq → mor A f (nat σ {f = f} γB ◾ cong (fun σ) eq )
+    -- ; id = λ t → cong (λ ξ → mor A C.id ξ t) {!uip !} ◾ id A t
+    ; id = λ t → cong₂ (mor A C.id) (uip _ _) refl ◾ id A t
+    ; comp = λ f g eq-f eq-g t → {!comp A f g!}
+    }
 
   _▶_ : (Γ : Con) → Ty Γ → Con
   Γ ▶ t = record
-    { pt = λ A → Σ (pt Γ A) (pt t)
-    ; mor = λ ϕ (γ , t) → mor Γ ϕ γ , {!!}
+    { pt = λ A → Σ (pt Γ A) (ty t)
+    ; mor = λ {A} {B} ϕ (γ , e) → mor Γ ϕ γ , mor t {!!} {!!} e
     ; id = {!!}
     ; comp = {!!}
+    }
+
+  wk : ∀ {Γ A} → Sub (Γ ▶ A) Γ
+  wk = record
+    { fun = proj₁
+    ; nat = λ _ → refl
     }
 
   record Tm (Γ : Con) (t : Ty Γ) : Set where
     field
-      pt : ∀ {A} (γ : pt Γ A) → pt t γ
+      tm : ∀ {A} (γ : pt Γ A) → ty t γ
       nat : ∀ {A B} (f : Mor A B) {γA : Con.pt Γ A} {γB : Con.pt Γ B} →
-        (e : mor Γ f γB ≡ γA) → mor t f e (pt γB) ≡ pt γA
+        (e : mor Γ f γB ≡ γA) → mor t f e (tm γB) ≡ tm γA
   open Tm public
-
-  Π : ∀ {Γ}(A : Ty Γ) → Ty (Γ ▶ A) → Ty Γ
-  Π A B = record
-    { pt = λ γ →
-         ∃ λ (f : (α : pt A γ) → pt B (γ , α)) →
-             ({!∀ {α : pt A γ} → {!!} !})
-    ; mor = λ ϕ eq (f , q) → {!!} , {!!}
-    ; id = {!!}
-    ; comp = {!!}
-    }
-
-  lam : ∀ {Γ} (A : Ty Γ) {B : Ty (Γ ▶ A)} → Tm (Γ ▶ A) B → Tm Γ (Π A B)
-  lam t e = record
-    { pt = λ γ → (λ α → pt e (γ , α)) , {!!}
-    ; nat = {!!}
-    }
 
 module Containers where
   record Container : Set where
@@ -138,6 +136,15 @@ module Containers where
 module Containers-CwF where
   open Containers
   open Category Containers.category
+
+  C0 : Container
+  C0 = record { shape = ⊥ ; positions = ⊥-elim }
+
+  fromC0 : ∀ C → Map C0 C
+  fromC0 C = record
+    { reshape = ⊥-elim
+    ; reposition = λ {sh} _ → ⊥-elim sh
+    }
 
   C1 : Container
   C1 = record { shape = ⊤ ; positions = λ _ → ⊤ }
@@ -168,31 +175,42 @@ module Containers-CwF where
 
   open CwF Containers.category
 
-  -- Bot : ∀ {Γ} → Ty Γ
-  -- Bot = record
-  --   { pt = {!!}
-  --   ; mor = {!!}
-  --   ; id = {!!}
-  --   ; comp = {!!}
-  --   }
-
   lift : Container → ∀ {Γ} → Ty Γ
   lift X = record
-    { pt = λ {A} _ → Map A X
+    { ty = λ {A} _ → Map A X
     ; mor = λ f eq ϕ → record { reshape = reshape ϕ ∘ reshape f ; reposition = reposition f ∘ reposition ϕ }
     ; id = λ _ → refl
     ; comp = {!!}
     }
 
   Bot : ∀ {Γ} → Ty Γ
-  Bot = lift record
-    { shape = ⊥
-    ; positions = λ ()
+  -- Bot = lift C0
+  Bot = record
+    { ty = λ _ → ⊥
+    ; mor = λ ϕ eq bot → bot
+    ; id = λ _ → refl
+    ; comp = λ _ _ _ _ _ → refl
     }
 
   elimBot : ∀ {Γ} (A : Ty Γ) → Tm Γ Bot → Tm Γ A
-  elimBot A tm = record
-    { pt = λ γ → {!reshape (pt tm γ)!}
+  elimBot {Γ} A bot = record
+    { tm = λ γ → ⊥-elim (tm bot γ)
+    ; nat = {!!}
+    }
+
+  Π : ∀ {Γ}(A : Ty Γ) → Ty (Γ ▶ A) → Ty Γ
+  Π A B = record
+    { ty = λ γ →
+         ∃ λ (f : (α : ty A γ) → ty B (γ , α)) →
+             (∀ {α : ty A γ} → {!!} → {!!} )
+    ; mor = λ ϕ eq (f , q) → {!!} , {!!}
+    ; id = {!!}
+    ; comp = {!!}
+    }
+
+  lam : ∀ {Γ} (A : Ty Γ) {B : Ty (Γ ▶ A)} → Tm (Γ ▶ A) B → Tm Γ (Π A B)
+  lam t e = record
+    { tm = λ γ → (λ α → tm e (γ , α)) , {!!}
     ; nat = {!!}
     }
 
@@ -204,15 +222,6 @@ module Containers-CwF where
 
   liftFun : ∀ {X Y} → Map X Y → Tm ([] ▶ lift X) (lift Y)
   liftFun f = record
-    { pt = λ {A} (_ , ϕ) → record { reshape = reshape f ∘ reshape ϕ ; reposition = reposition ϕ ∘ reposition f }
+    { tm = λ {A} (_ , ϕ) → record { reshape = reshape f ∘ reshape ϕ ; reposition = reposition ϕ ∘ reposition f }
     ; nat = λ _ eq → {!!}
     }
-
-  -- f₀ : Tm ([] ▶ A) B
-  -- f₀ = record
-  --   { pt = λ (_ , ϕ) → record
-  --     { reshape = λ _ → reshape ϕ tt
-  --     ; reposition = {!!}
-  --     }
-  --   ; nat = {!!}
-  --   }
