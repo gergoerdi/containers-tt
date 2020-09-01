@@ -1,3 +1,6 @@
+-- Horribly botched version of @andrasKovacs6's
+-- https://github.com/AndrasKovacs/misc-stuff/blob/master/agda/containerModel/Container.agda
+
 {-# OPTIONS --type-in-type #-}
 
 open import Relation.Binary.PropositionalEquality
@@ -20,7 +23,6 @@ uip : ∀ {A : Set}{x y : A}(p q : x ≡ y) → p ≡ q
 uip refl refl = refl
 
 module CT where
-
   record Category : Set where
     infixr 5 _∙_
     field
@@ -38,7 +40,6 @@ module CT where
     ; id = λ x → x
     ; ass = λ f g h → refl
     }
-
 open CT
 
 module CwF (C : Category) where
@@ -93,8 +94,8 @@ module CwF (C : Category) where
   _▶_ : (Γ : Con) → Ty Γ → Con
   Γ ▶ t = record
     { pt = λ A → Σ (pt Γ A) (ty t)
-    ; mor = λ {A} {B} ϕ (γ , e) → mor Γ ϕ γ , mor t {!!} {!!} e
-    ; id = {!!}
+    ; mor = λ {A} {B} ϕ (γ , e) → mor Γ ϕ γ , mor t ϕ refl e
+    ; id = λ {A} {(γ , e)} → {!cong₂ _,_ (id Γ {A} {γ}) ? !}
     ; comp = {!!}
     }
 
@@ -111,6 +112,12 @@ module CwF (C : Category) where
         (e : mor Γ f γB ≡ γA) → mor t f e (tm γB) ≡ tm γA
   open Tm public
 
+  var : ∀ {Γ A} → (t : Tm Γ A) → Sub Γ (Γ ▶ A)
+  var {Γ} t = record
+    { fun = λ γ → γ , tm t γ
+    ; nat = λ {_} {_} {f} γ → cong (mor Γ f γ ,_) (nat t f refl)
+    }
+
 module Containers where
   record Container : Set where
     field
@@ -124,19 +131,6 @@ module Containers where
       reposition : ∀ {sh : shape C} → (p : positions D (reshape sh)) → positions C sh
   open Map public
 
-  category : Category
-  category = record
-    { Ob = Container
-    ; Mor = Map
-    ; _∙_ = λ f g → record { reshape = reshape f ∘ reshape g ; reposition = reposition g ∘ reposition f }
-    ; id = record { reshape = λ sh → sh ; reposition = λ pos → pos }
-    ; ass = λ f g h → refl
-    }
-
-module Containers-CwF where
-  open Containers
-  open Category Containers.category
-
   C0 : Container
   C0 = record { shape = ⊥ ; positions = ⊥-elim }
 
@@ -146,26 +140,27 @@ module Containers-CwF where
     ; reposition = λ {sh} _ → ⊥-elim sh
     }
 
+  C∞ : Container
+  C∞ = record { shape = ⊤ ; positions = λ _ → ⊥ }
+
+  toC∞ : ∀ C → Map C C∞
+  toC∞ C = record
+    { reshape = λ _ → tt
+    ; reposition = λ ()
+    }
+
   C1 : Container
   C1 = record { shape = ⊤ ; positions = λ _ → ⊤ }
 
   C2 : Container
   C2 = record { shape = ⊤; positions = λ _ → Bool }
 
-  f : Mor C2 C1
-  f = record
-    { reshape = λ _ → _
-    ; reposition = λ _ → true
-    }
+  f g : Map C2 C1
+  f = record { reshape = λ _ → _ ; reposition = λ _ → true }
+  g = record { reshape = λ _ → _ ; reposition = λ _ → false }
 
-  g : Mor C2 C1
-  g = record
-    { reshape = λ _ → _
-    ; reposition = λ _ → false
-    }
-
-  fT≢fF : ¬ (f ≡ g)
-  fT≢fF eq = true≢false (lemma eq)
+  f≢g : ¬ (f ≡ g)
+  f≢g eq = true≢false (lemma eq)
     where
       lemma : f ≡ g → true ≡ false
       lemma = cong (λ x → reposition x tt)
@@ -173,31 +168,52 @@ module Containers-CwF where
       true≢false : ¬ (true ≡ false)
       true≢false ()
 
+  category : Category
+  category = record
+    { Ob = Container
+    ; Mor = Map
+    ; _∙_ = λ f g → record { reshape = reshape f ∘ reshape g ; reposition = reposition g ∘ reposition f }
+    ; id = record { reshape = λ sh → sh ; reposition = λ pos → pos }
+    ; ass = λ f g h → refl
+    }
+
+module TT where
+  record Model : Set where
+    field
+      cat : Category
+
+    open CwF cat
+
+    field
+      pi : ∀ {Γ}(A : Ty Γ) → Ty (Γ ▶ A) → Ty Γ
+      pi-intro : ∀ {Γ} (A : Ty Γ) {B : Ty (Γ ▶ A)} → Tm (Γ ▶ A) B → Tm Γ (pi A B)
+      pi-elim : ∀ {Γ A B} → Tm Γ (pi A B) → Tm (Γ ▶ A) B
+      pi-beta : ∀ {Γ A B t} → pi-elim (pi-intro {Γ} A {B} t) ≡ t
+
+      -- unit : ∀ {Γ} → Ty Γ
+      -- unit-intro : ∀ {Γ} → Tm Γ unit
+
+      -- bot : ∀ {Γ} → Ty Γ
+      -- bot-elim : ∀ {Γ} (A : Ty Γ) → Tm Γ bot → Tm Γ A
+
+      -- univ : ∀ {Γ} → Ty Γ
+      -- el : ∀ {Γ} → Tm Γ univ → Ty Γ
+      -- code : ∀ {Γ} → Ty Γ → Tm Γ univ
+      -- code-el : ∀ {Γ A} → code (el {Γ} A) ≡ A
+      -- el-code : ∀ {Γ A} → el {Γ} (code A) ≡ A
+
+      eql : ∀ {Γ A} → Tm Γ A → Tm Γ A → Ty Γ
+      eql-refl : ∀ {Γ A} (t : Tm Γ A) → Tm Γ (eql t t)
+      eql-subst : ∀ {Γ A} (B : Ty (Γ ▶ A)) {t u : Tm Γ A} →
+        (e : Tm Γ (eql t u)) →
+        Tm Γ (B [ var t ]T) → Tm Γ (B [ var u ]T)
+
+module Containers-CwF where
+  open Containers
+  open Category Containers.category
   open CwF Containers.category
 
-  lift : Container → ∀ {Γ} → Ty Γ
-  lift X = record
-    { ty = λ {A} _ → Map A X
-    ; mor = λ f eq ϕ → record { reshape = reshape ϕ ∘ reshape f ; reposition = reposition f ∘ reposition ϕ }
-    ; id = λ _ → refl
-    ; comp = {!!}
-    }
-
-  Bot : ∀ {Γ} → Ty Γ
-  -- Bot = lift C0
-  Bot = record
-    { ty = λ _ → ⊥
-    ; mor = λ ϕ eq bot → bot
-    ; id = λ _ → refl
-    ; comp = λ _ _ _ _ _ → refl
-    }
-
-  elimBot : ∀ {Γ} (A : Ty Γ) → Tm Γ Bot → Tm Γ A
-  elimBot {Γ} A bot = record
-    { tm = λ γ → ⊥-elim (tm bot γ)
-    ; nat = {!!}
-    }
-
+  --------------------------------------------------------------------
   Π : ∀ {Γ}(A : Ty Γ) → Ty (Γ ▶ A) → Ty Γ
   Π A B = record
     { ty = λ γ →
@@ -209,9 +225,112 @@ module Containers-CwF where
     }
 
   lam : ∀ {Γ} (A : Ty Γ) {B : Ty (Γ ▶ A)} → Tm (Γ ▶ A) B → Tm Γ (Π A B)
-  lam t e = record
+  lam A e = record
     { tm = λ γ → (λ α → tm e (γ , α)) , {!!}
     ; nat = {!!}
+    }
+
+  app : ∀ {Γ A B} → Tm Γ (Π A B) → Tm (Γ ▶ A) B
+  app e = record
+    { tm = λ (γ , t) → proj₁ (tm e γ) t
+    ; nat = {!!}
+    }
+
+  -- -- Unit
+  -- Unit : ∀ {Γ} → Ty Γ
+  -- Unit = record
+  --   { ty = λ _ → ⊤
+  --   ; mor = λ ϕ eq _ → tt
+  --   ; id = λ _ → refl
+  --   ; comp = λ _ _ _ _ _ → refl
+  --   }
+
+  -- Unit-intro : ∀ {Γ} → Tm Γ Unit
+  -- Unit-intro = record
+  --   { tm = λ _ → tt
+  --   ; nat = λ _ _ → refl
+  --   }
+
+  -- -- Bottom
+  -- Bot : ∀ {Γ} → Ty Γ
+  -- -- Bot = lift C0
+  -- Bot = record
+  --   { ty = λ _ → ⊥
+  --   ; mor = λ ϕ eq bot → bot
+  --   ; id = λ _ → refl
+  --   ; comp = λ _ _ _ _ _ → refl
+  --   }
+
+  -- Bot-elim : ∀ {Γ} (A : Ty Γ) → Tm Γ Bot → Tm Γ A
+  -- Bot-elim {Γ} A bot = record
+  --   { tm = λ γ → ⊥-elim (tm bot γ)
+  --   ; nat = {!!}
+  --   }
+
+  -- -- Universe
+  -- U : ∀ {Γ} → Ty Γ
+  -- U = record
+  --   { ty = λ γ → Σ Set λ A → A → Set
+  --   ; mor = {!!}
+  --   ; id = {!!}
+  --   ; comp = {!!}
+  --   }
+
+  -- El : ∀ {Γ} → Tm Γ U → Ty Γ
+  -- El {Γ} A = record
+  --   { ty = λ γ → proj₁ (tm A γ)
+  --   ; mor = {!!}
+  --   ; id = {!!}
+  --   ; comp = {!!}
+  --   }
+
+  -- c : ∀ {Γ} → Ty Γ → Tm Γ U
+  -- c {Γ} A = record
+  --   { tm = λ γ → ty A γ , {!!}
+  --   ; nat = {!!}
+  --   }
+
+  -- c-El : ∀ {Γ A} → c (El {Γ} A) ≡ A
+  -- c-El = {!!}
+
+  -- El-c : ∀ {Γ A} → El {Γ} (c A) ≡ A
+  -- El-c = {!!}
+
+  -- Equality
+  Eql : ∀ {Γ A} → Tm Γ A → Tm Γ A → Ty Γ
+  Eql t u = record
+    { ty = λ {C} γ → {!tm t γ!} -- tm t γ ≡ tm u γ
+    ; mor = {!!}
+    ; id = {!!}
+    ; comp = {!!}
+    }
+
+  Refl : ∀ {Γ A} (t : Tm Γ A) → Tm Γ (Eql t t)
+  Refl t = record { tm = {!!} ; nat = {!!} }
+
+  open TT
+
+  model : Model
+  model = record
+    { cat = category
+
+    ; pi = Π
+    ; pi-intro = lam
+    ; pi-elim = λ {Γ} {A} {B} → app {Γ} {A} {B}
+    ; pi-beta = {!!}
+
+    ; eql = Eql
+    ; eql-refl = Refl
+    ; eql-subst = {!!}
+    }
+
+  --------------------------------------------------------------------
+  lift : Container → ∀ {Γ} → Ty Γ
+  lift X = record
+    { ty = λ {A} _ → Map A X
+    ; mor = λ f eq ϕ → record { reshape = reshape ϕ ∘ reshape f ; reposition = reposition f ∘ reposition ϕ }
+    ; id = λ _ → refl
+    ; comp = {!!}
     }
 
   A : Ty []
@@ -220,8 +339,27 @@ module Containers-CwF where
   B : Ty ([] ▶ A)
   B = lift C1
 
+  --------------------------------------------------------------------
   liftFun : ∀ {X Y} → Map X Y → Tm ([] ▶ lift X) (lift Y)
   liftFun f = record
     { tm = λ {A} (_ , ϕ) → record { reshape = reshape f ∘ reshape ϕ ; reposition = reposition ϕ ∘ reposition f }
     ; nat = λ _ eq → {!!}
     }
+
+  ⟨f⟩ ⟨g⟩ : Tm [] (Π A B)
+  ⟨f⟩ = lam A (liftFun f)
+  ⟨g⟩ = lam A (liftFun g)
+
+  FunExtTy : Set
+  FunExtTy = ∀ {Γ A B}(f g : Tm Γ (Π A B))
+           → Tm (Γ ▶ A) (Eql (app {Γ} {A} {B} f) (app {Γ} {A} {B} g))
+           → Tm Γ (Eql f g)
+
+  notExtensional : ¬ FunExtTy
+  notExtensional = {!!}
+    where
+      true≢false : ¬ (true ≡ false)
+      true≢false ()
+
+      pointwise : Tm ([] ▶ A) (Eql (app {_} {A} {B} ⟨f⟩) (app {_} {A} {B} ⟨g⟩))
+      pointwise = {!Refl {[] ▶ A} {B} (app ⟨f⟩)!}
