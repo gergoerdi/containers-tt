@@ -320,7 +320,7 @@ module NoFunExt where
   e = Refl (app f)
 
   ¬FunExt : FunExtTy → ⊥
-  ¬FunExt funext with ap (λ f → ₂ f tt) (P (funext f g (Refl (app f))) tt)
+  ¬FunExt funext with ap (λ f → ₂ f tt) (P (funext f g e) tt)
   ... | ()
 
 -- t : Tm (∙ ▶ ⊥ ▶ ⊥) ⊥
