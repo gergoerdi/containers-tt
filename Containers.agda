@@ -48,9 +48,9 @@ module CwF (C : Category) where
   record Con : Set where
     field
       pt : Ob → Set
-      mor : ∀ {A B : Ob} → Mor A B → pt A → pt B
+      mor : ∀ {A B : Ob} → Mor A B → pt B → pt A
       id : ∀ {A} {y : pt A} → mor id y ≡ y
-      comp : ∀ {A B C} (f : Mor B C) (g : Mor A B) → ∀ y → mor (f ∙ g) y ≡ mor f (mor g y)
+      comp : ∀ {A B C} (f : Mor B C) (g : Mor A B) → ∀ y → mor (f ∙ g) y ≡ mor g (mor f y)
   open Con public
 
   [] : Con
@@ -64,19 +64,19 @@ module CwF (C : Category) where
   record Sub (Γ Δ : Con) : Set where
     field
       fun : ∀ {A} → pt Γ A → pt Δ A
-      nat : ∀ {A B} {f : Mor A B} → ∀ (γ : pt Γ A) → mor Δ f (fun γ) ≡ fun (mor Γ f γ)
+      nat : ∀ {A B} {f : Mor A B} → ∀ (γ : pt Γ B) → mor Δ f (fun γ) ≡ fun (mor Γ f γ)
 
   record Ty (Γ : Con) : Set where
     field
       pt : ∀ {A} (γ : pt Γ A) → Set
-      mor : ∀ {A B} (f : Mor A B) {γA : Con.pt Γ A} {γB : Con.pt Γ B} → Con.mor Γ f γA ≡ γB  → pt γB → pt γA
+      mor : ∀ {A B} (f : Mor A B) {γA : Con.pt Γ A} {γB : Con.pt Γ B} → Con.mor Γ f γB ≡ γA  → pt γB → pt γA
       id : ∀ {A} {γ : Con.pt Γ A} (t : pt γ) → mor C.id (id Γ) t ≡ t
 
       comp : ∀ {A B C} (f : Mor B C) (g : Mor A B) {γA : Con.pt Γ A} {γB : Con.pt Γ B} {γC : Con.pt Γ C} →
-        (eq-f : Con.mor Γ f γB ≡ γC) →
-        (eq-g : Con.mor Γ g γA ≡ γB) →
-        (t : pt γA) →
-        {!mor (f ∙ g) (trans {!!} eq-f) t ≡ mor f eq-f (mor g eq-g t)!}
+        (eq-f : Con.mor Γ f γC ≡ γB) →
+        (eq-g : Con.mor Γ g γB ≡ γA) →
+        (t : pt γC) →
+        mor (f ∙ g) {!!} t ≡ mor g eq-g (mor f eq-f t)
       --     -- morph-comp : ∀ {x y z} (f : Hom x y) (g : Hom y z) {γz : Γ ⟨ z ⟩} {γy : Γ ⟨ y ⟩} {γx : Γ ⟨ x ⟩} →
       --     --        (eq-zy : Γ ⟪ g ⟫ γz ≡ γy) (eq-yx : Γ ⟪ f ⟫ γy ≡ γx) (t : type z γz) →
       --     --        morph (g ∙ f) (strong-rel-comp Γ eq-zy eq-yx) t ≡ morph f eq-yx (morph g eq-zy t)
@@ -85,7 +85,7 @@ module CwF (C : Category) where
   _▶_ : (Γ : Con) → Ty Γ → Con
   Γ ▶ t = record
     { pt = λ A → Σ (pt Γ A) (pt t)
-    ; mor = {!!}
+    ; mor = λ ϕ (γ , t) → mor Γ ϕ γ , {!!}
     ; id = {!!}
     ; comp = {!!}
     }
@@ -94,8 +94,24 @@ module CwF (C : Category) where
     field
       pt : ∀ {A} (γ : pt Γ A) → pt t γ
       nat : ∀ {A B} (f : Mor A B) {γA : Con.pt Γ A} {γB : Con.pt Γ B} →
-        (e : mor Γ f γA ≡ γB) → mor t f e (pt γB) ≡ pt γA
+        (e : mor Γ f γB ≡ γA) → mor t f e (pt γB) ≡ pt γA
   open Tm public
+
+  Π : ∀ {Γ}(A : Ty Γ) → Ty (Γ ▶ A) → Ty Γ
+  Π A B = record
+    { pt = λ γ →
+         ∃ λ (f : (α : pt A γ) → pt B (γ , α)) →
+             ({!∀ {α : pt A γ} → {!!} !})
+    ; mor = λ ϕ eq (f , q) → {!!} , {!!}
+    ; id = {!!}
+    ; comp = {!!}
+    }
+
+  lam : ∀ {Γ} (A : Ty Γ) {B : Ty (Γ ▶ A)} → Tm (Γ ▶ A) B → Tm Γ (Π A B)
+  lam t e = record
+    { pt = λ γ → (λ α → pt e (γ , α)) , {!!}
+    ; nat = {!!}
+    }
 
 module Containers where
   record Container : Set where
@@ -152,11 +168,32 @@ module Containers-CwF where
 
   open CwF Containers.category
 
-  lift : ∀ {Γ} → (X : Container) → Ty Γ
+  -- Bot : ∀ {Γ} → Ty Γ
+  -- Bot = record
+  --   { pt = {!!}
+  --   ; mor = {!!}
+  --   ; id = {!!}
+  --   ; comp = {!!}
+  --   }
+
+  lift : Container → ∀ {Γ} → Ty Γ
   lift X = record
     { pt = λ {A} _ → Map A X
     ; mor = λ f eq ϕ → record { reshape = reshape ϕ ∘ reshape f ; reposition = reposition f ∘ reposition ϕ }
     ; id = λ _ → refl
+    ; comp = {!!}
+    }
+
+  Bot : ∀ {Γ} → Ty Γ
+  Bot = lift record
+    { shape = ⊥
+    ; positions = λ ()
+    }
+
+  elimBot : ∀ {Γ} (A : Ty Γ) → Tm Γ Bot → Tm Γ A
+  elimBot A tm = record
+    { pt = λ γ → {!reshape (pt tm γ)!}
+    ; nat = {!!}
     }
 
   A : Ty []
@@ -168,7 +205,7 @@ module Containers-CwF where
   liftFun : ∀ {X Y} → Map X Y → Tm ([] ▶ lift X) (lift Y)
   liftFun f = record
     { pt = λ {A} (_ , ϕ) → record { reshape = reshape f ∘ reshape ϕ ; reposition = reposition ϕ ∘ reposition f }
-    ; nat = λ _ _ → {!!}
+    ; nat = λ _ eq → {!!}
     }
 
   -- f₀ : Tm ([] ▶ A) B
