@@ -1,5 +1,4 @@
 {-# OPTIONS --type-in-type #-}
-{-# OPTIONS --allow-unsolved-metas #-}
 
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong)
 open import Data.Unit
@@ -18,13 +17,14 @@ record Container : Set where
   constructor con
   field
     shape : Set
-    positions : shape → Set
+    position : shape → Set
 open Container public
 
 record Map (C D : Container) : Set where
+  constructor cmap
   field
     reshape : shape C → shape D
-    reposition : ∀ {sh : shape C} → (p : positions D (reshape sh)) → positions C sh
+    reposition : ∀ {sh : shape C} → (p : position D (reshape sh)) → position C sh
 open Map public
 
 category : Category
@@ -40,23 +40,23 @@ record Refinement (Γ : Container) : Set where
   constructor refinement
   field
     ornament : shape Γ → Set
-    positions : {sh : shape Γ} (o : ornament sh) → Set
-open Refinement
+    position : {sh : shape Γ} (o : ornament sh) → Set
+open Refinement public
 
 refine : (Γ : Container) → Refinement Γ → Container
-refine Γ P = con (Σ (shape Γ) (ornament P)) λ (sh , o) → positions Γ sh ⊎ positions P o
+refine Γ R = con (Σ (shape Γ) (ornament R)) λ (sh , o) → position Γ sh ⊎ position R o
 
 record Extension (Γ : Container) (P : Refinement Γ) : Set where
   constructor extension
   field
     decorate : (sh : shape Γ) → ornament P sh
-    reposition : {sh : shape Γ} → positions P {sh} (decorate sh) → positions Γ sh
-open Extension
+    reposition : {sh : shape Γ} → position P {sh} (decorate sh) → position Γ sh
+open Extension public
 
-extend : (Γ : Container) {P : Refinement Γ} → (t : Extension Γ P) → Map Γ (refine Γ P)
-extend Γ t = record
-  { reshape = λ sh → sh , decorate t sh
-  ; reposition = fromInj₁ (reposition t)
+extend : (Γ : Container) {R : Refinement Γ} → (e : Extension Γ R) → Map Γ (refine Γ R)
+extend Γ e = record
+  { reshape = λ sh → sh , decorate e sh
+  ; reposition = fromInj₁ (reposition e)
   }
 
 C0 : Container
