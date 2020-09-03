@@ -6,8 +6,9 @@ open import Data.Empty
 open import Data.Bool
 open import Data.Product
 open import Data.Sum
+open import Data.Maybe
 open import Relation.Nullary
-open import Function using (_∘_; id; flip; const)
+open import Function using (_∘_; id; flip; const; case_of_)
 
 open import TT
 open import Containers
@@ -21,11 +22,11 @@ mapE : ∀ {Γ Δ R} (f : Map Γ Δ) → (e : Extension Δ R) → Extension Γ (
 mapE f e = extension (decorate e ∘ reshape f) (reposition f ∘ reposition e)
 
 coarse : ∀ {Γ Δ R} → Map Γ (refine Δ R) → Map Γ Δ
-coarse f = cmap (proj₁ ∘ reshape f) (reposition f ∘ inj₁)
+coarse f = cmap (proj₁ ∘ reshape f) (reposition f ∘ old)
 
 -- TODO: rename
 π₂ : ∀ {Γ Δ R}(f : Map Γ (refine Δ R)) → Extension Γ (mapR (coarse f) R)
-π₂ f = extension (proj₂ ∘ reshape f) (reposition f ∘ inj₂)
+π₂ f = extension (proj₂ ∘ reshape f) (reposition f ∘ new)
 
 ttSyntax : Syntax
 ttSyntax = record
@@ -42,8 +43,11 @@ ttSyntax = record
   }
 open Syntax ttSyntax
 
-open import Data.Maybe
 open import Data.Maybe.Relation.Unary.All
+
+data Resource {Γ Δ} (A : Refinement Γ) (B : Refinement Δ) (sh : shape Γ) (o : ornament A sh) : Set where
+  create : Resource A B sh o
+  propagate : position A o → Resource A B sh o
 
 record Reornament {Γ} (A : Refinement Γ) (B : Refinement (refine Γ A)) (sh : shape Γ) : Set where
   field
@@ -51,6 +55,7 @@ record Reornament {Γ} (A : Refinement Γ) (B : Refinement (refine Γ A)) (sh : 
     reposition : ∀ {o} → position B (reornament o) → Maybe (position A o)
 open Reornament public
 
+-- Proof that there's a new position that isn't filled from a src position
 record IsExtension {Γ A B sh} (r : Reornament {Γ} A B sh) : Set where
   constructor isExtension
   field
@@ -68,24 +73,36 @@ open IsExtension public
 app : ∀ {Γ A B} → Extension Γ (Π A B) → Extension (refine Γ A) B
 app {Γ} {A} {B} e = record
   { decorate = λ (sh , o) → reornament (decorate e sh) o
-  ; reposition = λ {(sh , o)} p →
-    maybe {B = λ p₀ → p₀ ≡ reposition (decorate e sh) p → position (refine Γ A) (sh , o)}
-      (λ p₀ _  → inj₂ p₀)
-      (λ    eq → inj₁ (reposition e (isExtension o p (subst Is-nothing eq nothing))))
-      (reposition (decorate e sh) p)
-      refl
+  ; reposition = reposition′
   }
+  where
+    decorate′ : (sh : shape (refine Γ A)) → ornament B sh
+    decorate′ (sh , o) = reornament (decorate e sh) o
+
+    reposition′ : ∀ {sh} →
+      position           B  (decorate′ sh) →
+      position (refine Γ A)            sh
+    reposition′ {(sh , o)} p = case reposition (decorate e sh) p of λ where
+      nothing → old (reposition e (isExtension o p {!!}))
+      (just p₀) → new p₀
+      -- maybe {B = λ p₀ → p₀ ≡ mp₀ → position (refine Γ A) (sh , o)}
+      --   (λ p₀ _  → new p₀)
+      --   (λ    eq → old (reposition e (isExtension o p (subst Is-nothing eq nothing))))
+      --   mp₀
+      --   refl
+      -- where
+      --   mp₀ = reposition (decorate e sh) p
 
 lam : ∀ {Γ A B} → Extension (refine Γ A) B → Extension Γ (Π A B)
 lam {Γ} {A} {B} t = record
   { decorate = λ sh → record
     { reornament = λ o → decorate t (sh , o)
-    ; reposition = λ p → isInj₂ (reposition t p)
+    ; reposition = λ p → from-new (reposition t p)
     }
-  ; reposition = λ {sh} ext →
-    [_,_] {C = λ p → Is-nothing (isInj₂ p) → position Γ sh}
-      (λ p _ → p)
-      (λ { _ (just ()) })
-      (reposition t (dest-position ext))
-      (prf ext)
+  ; reposition = λ {sh} ext → {!!}
+    -- [_,_] {C = λ p → Is-nothing (from-new p) → position Γ sh}
+    --   (λ p _ → p)
+    --   (λ { _ (just ()) })
+    --   (reposition t (dest-position ext))
+    --   (prf ext)
   }

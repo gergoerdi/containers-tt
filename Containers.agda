@@ -7,6 +7,7 @@ open import Data.Bool
 open import Data.Product
 open import Data.Sum
 open import Relation.Nullary
+open import Data.Maybe
 open import Function using (_∘_; id)
 
 open import CT
@@ -43,8 +44,20 @@ record Refinement (Γ : Container) : Set where
     position : {sh : shape Γ} (o : ornament sh) → Set
 open Refinement public
 
+data Source (Γ : Container) (sh : shape Γ) (R : Refinement Γ) (o : ornament R sh) : Set where
+  old : position Γ sh → Source Γ sh R o
+  new : position R o → Source Γ sh R o
+
+map-new : ∀ {Γ R sh o} → (position R o -> position Γ sh) → Source Γ sh R o → position Γ sh
+map-new f (old p) = p
+map-new f (new q) = f q
+
+from-new : ∀ {Γ R sh o} → Source Γ sh R o → Maybe (position R o)
+from-new (old _) = nothing
+from-new (new p) = just p
+
 refine : (Γ : Container) → Refinement Γ → Container
-refine Γ R = con (Σ (shape Γ) (ornament R)) λ (sh , o) → position Γ sh ⊎ position R o
+refine Γ R = con (Σ (shape Γ) (ornament R)) λ (sh , o) → Source Γ sh R o
 
 record Extension (Γ : Container) (P : Refinement Γ) : Set where
   constructor extension
@@ -56,7 +69,7 @@ open Extension public
 extend : (Γ : Container) {R : Refinement Γ} → (e : Extension Γ R) → Map Γ (refine Γ R)
 extend Γ e = record
   { reshape = λ sh → sh , decorate e sh
-  ; reposition = fromInj₁ (reposition e)
+  ; reposition = map-new (reposition e)
   }
 
 C0 : Container
