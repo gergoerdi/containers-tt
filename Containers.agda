@@ -1,12 +1,14 @@
 {-# OPTIONS --type-in-type #-}
+{-# OPTIONS --allow-unsolved-metas #-}
 
-open import Relation.Binary.PropositionalEquality
+open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong)
 open import Data.Unit
 open import Data.Empty
 open import Data.Bool
 open import Data.Product
+open import Data.Sum
 open import Relation.Nullary
-open import Function using (_∘_)
+open import Function using (_∘_; id)
 
 open import CT
 
@@ -24,6 +26,38 @@ record Map (C D : Container) : Set where
     reshape : shape C → shape D
     reposition : ∀ {sh : shape C} → (p : positions D (reshape sh)) → positions C sh
 open Map public
+
+category : Category
+category = record
+  { Ob = Container
+  ; Mor = Map
+  ; _∙_ = λ f g → record { reshape = reshape f ∘ reshape g ; reposition = reposition g ∘ reposition f }
+  ; id = record { reshape = id ; reposition = id }
+  ; ass = λ f g h → refl
+  }
+
+record Refinement (Γ : Container) : Set where
+  constructor refinement
+  field
+    ornament : shape Γ → Set
+    positions : {sh : shape Γ} (o : ornament sh) → Set
+open Refinement
+
+refine : (Γ : Container) → Refinement Γ → Container
+refine Γ P = con (Σ (shape Γ) (ornament P)) λ (sh , o) → positions Γ sh ⊎ positions P o
+
+record Extension (Γ : Container) (P : Refinement Γ) : Set where
+  constructor extension
+  field
+    decorate : (sh : shape Γ) → ornament P sh
+    reposition : {sh : shape Γ} → positions P {sh} (decorate sh) → positions Γ sh
+open Extension
+
+extend : (Γ : Container) {P : Refinement Γ} → (t : Extension Γ P) → Map Γ (refine Γ P)
+extend Γ t = record
+  { reshape = λ sh → sh , decorate t sh
+  ; reposition = fromInj₁ (reposition t)
+  }
 
 C0 : Container
 C0 = con ⊥ λ ()
@@ -61,32 +95,3 @@ f≢g eq = true≢false (lemma eq)
 
     true≢false : ¬ (true ≡ false)
     true≢false ()
-
-category : Category
-category = record
-  { Ob = Container
-  ; Mor = Map
-  ; _∙_ = λ f g → record { reshape = reshape f ∘ reshape g ; reposition = reposition g ∘ reposition f }
-  ; id = record { reshape = λ sh → sh ; reposition = λ pos → pos }
-  ; ass = λ f g h → refl
-  }
-
-open import TT
-
-ttSyntax : Syntax
-ttSyntax = record
-  { Con = Container
-  ; Sub = Map
-  ; Ty = λ Γ →
-       ∃ λ (P : shape Γ → Set) →
-           ∀ {sh : shape Γ} (α : P sh) → Set
-  ; Tm = λ Γ (P , R) →
-       ∃ λ (P : (sh : shape Γ) → P sh) →
-           ∀ {sh : shape Γ} → R {sh} (P sh) → positions Γ sh
-
-  ; [] = con ⊤ λ _ → ⊥
-  ; _▶_ = {!!}
-
-  ; _[_]T = {!!}
-  ; _[_]t = {!!}
-  }

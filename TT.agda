@@ -16,5 +16,4 @@ record Syntax : Set where
     _▶_ : (Γ : Con) → Ty Γ → Con
 
     _[_]T : ∀ {Γ Δ} → Ty Δ → Sub Γ Δ → Ty Γ
-
     _[_]t : ∀ {Γ Δ A} → Tm Δ A → (σ : Sub Γ Δ) → Tm Γ (A [ σ ]T)
