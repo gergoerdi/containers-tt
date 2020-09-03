@@ -7,7 +7,7 @@ open import Data.Bool
 open import Data.Product
 open import Data.Sum
 open import Relation.Nullary
-open import Function using (_∘_; id; flip)
+open import Function using (_∘_; id; flip; const)
 
 open import TT
 open import Containers
@@ -51,26 +51,41 @@ record Reornament {Γ} (A : Refinement Γ) (B : Refinement (refine Γ A)) (sh : 
     reposition : ∀ {o} → position B (reornament o) → Maybe (position A o)
 open Reornament public
 
+record IsExtension {Γ A B sh} (r : Reornament {Γ} A B sh) : Set where
+  constructor isExtension
+  field
+    src-ornament : ornament A sh
+    dest-position : position B (reornament r src-ornament)
+    prf : Is-nothing (reposition r dest-position)
+open IsExtension public
+
 Π : ∀ {Γ} → (A : Refinement Γ) → (B : Refinement (refine Γ A)) → Refinement Γ
 Π {Γ} A B = record
   { ornament = Reornament A B
-  ; position = λ {sh} r → ∃₂ λ (o : ornament A sh) (fα* : position B (reornament r o)) → Is-nothing (reposition r fα*)
+  ; position = IsExtension
   }
 
 app : ∀ {Γ A B} → Extension Γ (Π A B) → Extension (refine Γ A) B
 app {Γ} {A} {B} e = record
   { decorate = λ (sh , o) → reornament (decorate e sh) o
   ; reposition = λ {(sh , o)} p →
-    maybe {B = λ ab → ab ≡ reposition (decorate e sh) p → position (refine Γ A) (sh , o)}
+    maybe {B = λ p₀ → p₀ ≡ reposition (decorate e sh) p → position (refine Γ A) (sh , o)}
       (λ p₀ _  → inj₂ p₀)
-      (λ    eq → inj₁ (reposition e (o , p , subst Is-nothing eq nothing)))
+      (λ    eq → inj₁ (reposition e (isExtension o p (subst Is-nothing eq nothing))))
       (reposition (decorate e sh) p)
       refl
   }
 
--- lam : ∀ {Γ A B} → Tm (Γ ▶ A) B → Tm Γ (Π A B)
--- P (lam t) γ = (λ x → P t (γ , x)) , λ β* → ⊎-map _ (λ α* → α*) (R t β*)
--- R (lam {Γ} {A} {B} t) {γ} (α , β , p) =
---   ⊎-elim (λ ab → ⊎-map (λ _ → tt) (λ α* → α*) ab ≡ inj₁ tt → R Γ γ)
---          (λ γ* _ → γ*) (λ b p → ⊥-elim (⊎-disjoint (p ⁻¹)))
---          (R t β) p
+lam : ∀ {Γ A B} → Extension (refine Γ A) B → Extension Γ (Π A B)
+lam {Γ} {A} {B} t = record
+  { decorate = λ sh → record
+    { reornament = λ o → decorate t (sh , o)
+    ; reposition = λ p → isInj₂ (reposition t p)
+    }
+  ; reposition = λ {sh} ext →
+    [_,_] {C = λ p → Is-nothing (isInj₂ p) → position Γ sh}
+      (λ p _ → p)
+      (λ { _ (just ()) })
+      (reposition t (dest-position ext))
+      (prf ext)
+  }
