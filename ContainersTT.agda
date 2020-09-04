@@ -1,6 +1,7 @@
 {-# OPTIONS --type-in-type #-}
 
-open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; subst)
+open import Relation.Binary.PropositionalEquality
+  using (_≡_; refl; sym; cong; subst; inspect; [_])
 open import Data.Unit
 open import Data.Empty
 open import Data.Bool
@@ -71,38 +72,18 @@ open IsExtension public
   }
 
 app : ∀ {Γ A B} → Extension Γ (Π A B) → Extension (refine Γ A) B
-app {Γ} {A} {B} e = record
-  { decorate = λ (sh , o) → reornament (decorate e sh) o
-  ; reposition = reposition′
-  }
-  where
-    decorate′ : (sh : shape (refine Γ A)) → ornament B sh
-    decorate′ (sh , o) = reornament (decorate e sh) o
-
-    reposition′ : ∀ {sh} →
-      position           B  (decorate′ sh) →
-      position (refine Γ A)            sh
-    reposition′ {(sh , o)} p = case reposition (decorate e sh) p of λ where
-      nothing → old (reposition e (isExtension o p {!!}))
-      (just p₀) → new p₀
-      -- maybe {B = λ p₀ → p₀ ≡ mp₀ → position (refine Γ A) (sh , o)}
-      --   (λ p₀ _  → new p₀)
-      --   (λ    eq → old (reposition e (isExtension o p (subst Is-nothing eq nothing))))
-      --   mp₀
-      --   refl
-      -- where
-      --   mp₀ = reposition (decorate e sh) p
+decorate (app e) (sh , o) = reornament (decorate e sh) o
+reposition (app e) {(sh , o)} p
+  with reposition (decorate e sh) p | inspect (reposition (decorate e sh)) p
+... | nothing | [ eq ] = old (reposition e (isExtension o p (subst Is-nothing (sym eq) nothing)))
+... | just p₀ | _      = new p₀
 
 lam : ∀ {Γ A B} → Extension (refine Γ A) B → Extension Γ (Π A B)
-lam {Γ} {A} {B} t = record
-  { decorate = λ sh → record
-    { reornament = λ o → decorate t (sh , o)
-    ; reposition = λ p → from-new (reposition t p)
-    }
-  ; reposition = λ {sh} ext → {!!}
-    -- [_,_] {C = λ p → Is-nothing (from-new p) → position Γ sh}
-    --   (λ p _ → p)
-    --   (λ { _ (just ()) })
-    --   (reposition t (dest-position ext))
-    --   (prf ext)
+decorate (lam t) sh = record
+  { reornament = decorate t ∘ (sh ,_)
+  ; reposition = from-new ∘ reposition t
   }
+reposition (lam t) {sh} ext
+  with reposition t (dest-position ext) | inspect (reposition t) (dest-position ext)
+... | old p | _      = p
+... | new p | [ eq ] = case subst Is-nothing (cong from-new eq) (prf ext) of λ {(just ())}
