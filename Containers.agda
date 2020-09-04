@@ -52,10 +52,6 @@ map-new : ∀ {Γ R sh o} → (position R o -> position Γ sh) → Source Γ sh 
 map-new f (old p) = p
 map-new f (new q) = f q
 
-from-new : ∀ {Γ R sh o} → Source Γ sh R o → Maybe (position R o)
-from-new (old _) = nothing
-from-new (new p) = just p
-
 refine : (Γ : Container) → Refinement Γ → Container
 refine Γ R = con (Σ (shape Γ) (ornament R)) λ (sh , o) → Source Γ sh R o
 

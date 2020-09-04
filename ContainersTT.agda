@@ -46,23 +46,31 @@ open Syntax ttSyntax
 
 open import Data.Maybe.Relation.Unary.All
 
-data Resource {Γ Δ} (A : Refinement Γ) (B : Refinement Δ) (sh : shape Γ) (o : ornament A sh) : Set where
-  create : Resource A B sh o
-  propagate : position A o → Resource A B sh o
+data Resource {Γ} (A : Refinement Γ) (sh : shape Γ) (o : ornament A sh) : Set where
+  create : Resource A sh o
+  propagate : position A o → Resource A sh o
+
+Is-created : ∀ {Γ} {A : Refinement Γ} {sh o} → Resource A sh o → Set
+Is-created create = ⊤
+Is-created (propagate _) = ⊥
+
+from-new : ∀ {Γ} {A : Refinement Γ} {sh o} → Source Γ sh A o → Resource A sh o
+from-new (old _) = create
+from-new (new p) = propagate p
 
 record Reornament {Γ} (A : Refinement Γ) (B : Refinement (refine Γ A)) (sh : shape Γ) : Set where
   field
     reornament : (o : ornament A sh) → ornament B (sh , o)
-    reposition : ∀ {o} → position B (reornament o) → Maybe (position A o)
+    reposition : ∀ {o} → position B (reornament o) → Resource A sh o
 open Reornament public
 
--- Proof that there's a new position that isn't filled from a src position
+-- Proof that there's an output position that isn't filled from a src position
 record IsExtension {Γ A B sh} (r : Reornament {Γ} A B sh) : Set where
   constructor isExtension
   field
     src-ornament : ornament A sh
     dest-position : position B (reornament r src-ornament)
-    prf : Is-nothing (reposition r dest-position)
+    prf : Is-created (reposition r dest-position)
 open IsExtension public
 
 Π : ∀ {Γ} → (A : Refinement Γ) → (B : Refinement (refine Γ A)) → Refinement Γ
@@ -75,8 +83,8 @@ app : ∀ {Γ A B} → Extension Γ (Π A B) → Extension (refine Γ A) B
 decorate (app e) (sh , o) = reornament (decorate e sh) o
 reposition (app e) {(sh , o)} p
   with reposition (decorate e sh) p | inspect (reposition (decorate e sh)) p
-... | nothing | [ eq ] = old (reposition e (isExtension o p (subst Is-nothing (sym eq) nothing)))
-... | just p₀ | _      = new p₀
+... | create       | [ eq ] = old (reposition e (isExtension o p (subst Is-created (sym eq) tt)))
+... | propagate p₀ | _      = new p₀
 
 lam : ∀ {Γ A B} → Extension (refine Γ A) B → Extension Γ (Π A B)
 decorate (lam t) sh = record
@@ -86,4 +94,4 @@ decorate (lam t) sh = record
 reposition (lam t) {sh} ext
   with reposition t (dest-position ext) | inspect (reposition t) (dest-position ext)
 ... | old p | _      = p
-... | new p | [ eq ] = case subst Is-nothing (cong from-new eq) (prf ext) of λ {(just ())}
+... | new p | [ eq ] = case subst Is-created (cong from-new eq) (prf ext) of λ {()}
