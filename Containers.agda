@@ -1,13 +1,7 @@
 {-# OPTIONS --type-in-type #-}
 
-open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong)
-open import Data.Unit
-open import Data.Empty
-open import Data.Bool
+open import Relation.Binary.PropositionalEquality using (_≡_; refl)
 open import Data.Product
-open import Data.Sum
-open import Relation.Nullary
-open import Data.Maybe
 open import Function using (_∘_; id)
 
 open import CT
@@ -44,6 +38,9 @@ record Refinement (Γ : Container) : Set where
     position : {sh : shape Γ} (o : ornament sh) → Set
 open Refinement public
 
+mapR : ∀ {Γ Δ} → Map Γ Δ → Refinement Δ → Refinement Γ
+mapR {Γ} {Δ} f R = refinement (ornament R ∘ reshape f) (position R)
+
 data Source (Γ : Container) (sh : shape Γ) (R : Refinement Γ) (o : ornament R sh) : Set where
   old : position Γ sh → Source Γ sh R o
   new : position R o → Source Γ sh R o
@@ -68,39 +65,12 @@ extend Γ e = record
   ; reposition = map-new (reposition e)
   }
 
-C0 : Container
-C0 = con ⊥ λ ()
+mapE : ∀ {Γ Δ R} (f : Map Γ Δ) → (e : Extension Δ R) → Extension Γ (mapR f R)
+mapE f e = extension (decorate e ∘ reshape f) (reposition f ∘ reposition e)
 
-fromC0 : ∀ C → Map C0 C
-fromC0 C = record
-  { reshape = ⊥-elim
-  ; reposition = λ {sh} _ → ⊥-elim sh
-  }
+coarse : ∀ {Γ Δ R} → Map Γ (refine Δ R) → Map Γ Δ
+coarse f = cmap (proj₁ ∘ reshape f) (reposition f ∘ old)
 
-C∞ : Container
-C∞ = con ⊤ λ _ → ⊥
-
-toC∞ : ∀ C → Map C C∞
-toC∞ C = record
-  { reshape = λ _ → tt
-  ; reposition = λ ()
-  }
-
-C1 : Container
-C1 = con ⊤ λ _ → ⊤
-
-C2 : Container
-C2 = con ⊤ λ _ → Bool
-
-f g : Map C2 C1
-f = record { reshape = λ _ → _ ; reposition = λ _ → true }
-g = record { reshape = λ _ → _ ; reposition = λ _ → false }
-
-f≢g : ¬ (f ≡ g)
-f≢g eq = true≢false (lemma eq)
-  where
-    lemma : f ≡ g → true ≡ false
-    lemma = cong (λ x → reposition x tt)
-
-    true≢false : ¬ (true ≡ false)
-    true≢false ()
+-- TODO: rename
+π₂ : ∀ {Γ Δ R}(f : Map Γ (refine Δ R)) → Extension Γ (mapR (coarse f) R)
+π₂ f = extension (proj₂ ∘ reshape f) (reposition f ∘ new)
